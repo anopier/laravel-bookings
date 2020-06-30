@@ -108,6 +108,25 @@ trait BookingScopes
                     ->where('starts_at', '<', new Carbon($endsAt));
     }
 
+    public function bookingsStartsOrEndsBetween(string $startsAt, string $endsAt): MorphMany
+    {
+        return $this->bookings()->where(function($query) {
+            $query->where(function($query1) {
+                $query1->whereNull('canceled_at')
+                    ->whereNotNull('starts_at')
+                    ->where('starts_at', '>', new Carbon($startsAt))
+                    ->where('starts_at', '<', new Carbon($endsAt));
+            });
+            $query->orWhere(function($query1) {
+                $query1->bookings()
+                    ->whereNull('canceled_at')
+                    ->whereNotNull('ends_at')
+                    ->where('ends_at', '>', new Carbon($startsAt))
+                    ->where('ends_at', '<', new Carbon($endsAt));
+            });
+        });
+    }
+
     /**
      * Get bookings ends before the given date.
      *

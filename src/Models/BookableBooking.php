@@ -39,7 +39,7 @@ abstract class BookableBooking extends Model
      * {@inheritdoc}
      */
     protected $casts = [
-        'bookable_id' => 'integer',
+        'bookable_id' => 'string',
         'bookable_type' => 'string',
         'customer_id' => 'integer',
         'customer_type' => 'string',
@@ -69,7 +69,7 @@ abstract class BookableBooking extends Model
      * @var array
      */
     protected $rules = [
-        'bookable_id' => 'required|integer',
+        /*'bookable_id' => 'required|string',
         'bookable_type' => 'required|string|strip_tags|max:150',
         'customer_id' => 'required|integer',
         'customer_type' => 'required|string|strip_tags|max:150',
@@ -82,7 +82,7 @@ abstract class BookableBooking extends Model
         'formula' => 'nullable|array',
         'canceled_at' => 'nullable|date',
         'options' => 'nullable|array',
-        'notes' => 'nullable|string|strip_tags|max:10000',
+        'notes' => 'nullable|string|strip_tags|max:10000',*/
     ];
 
     /**
@@ -114,14 +114,14 @@ abstract class BookableBooking extends Model
     {
         parent::boot();
 
-        static::validating(function (self $bookableAvailability) {
+        /*static::validating(function (self $bookableAvailability) {
             [$price, $formula, $currency] = is_null($bookableAvailability->price)
-                ? $bookableAvailability->calculatePrice($bookableAvailability->bookable, $bookableAvailability->starts_at, $bookableAvailability->ends_at) : [$bookableAvailability->price, $bookableAvailability->formula, $bookableAvailability->currency];
+                ? $bookableAvailability->calculatePrice2($bookableAvailability->bookable, $bookableAvailability->starts_at, $bookableAvailability->ends_at) : [$bookableAvailability->price, $bookableAvailability->formula, $bookableAvailability->currency];
 
             $bookableAvailability->currency = $currency;
             $bookableAvailability->formula = $formula;
             $bookableAvailability->price = $price;
-        });
+        });*/
     }
 
     /**
@@ -142,6 +142,45 @@ abstract class BookableBooking extends Model
     public function scopeWithOptions(): Builder
     {
         return SchemalessAttributes::scopeWithSchemalessAttributes('options');
+    }
+
+    /**
+     * @TODO: implement rates, availabilites, minimum & maximum units
+     *
+     * Calculate the booking price.
+     *
+     * @param \Illuminate\Database\Eloquent\Model $bookable
+     * @param \Carbon\Carbon                      $startsAt
+     * @param \Carbon\Carbon                      $endsAt
+     * @param int                                 $quantity
+     *
+     * @return array
+     */
+    public function calculatePrice2(Model $bookable, Carbon $startsAt, Carbon $endsAt = null, int $quantity = 1): array
+    {
+        $totalUnits = 0;
+
+        switch ($bookable->unit) {
+            case 'use':
+                $totalUnits = 1;
+                $totalPrice = $bookable->base_cost + ($bookable->unit_cost * $totalUnits * $quantity);
+                break;
+            default:
+                $method = 'add'.ucfirst($bookable->unit);
+
+                for ($date = clone $startsAt; $date->lt($endsAt ?? $date->addDay()); $date->{$method}()) {
+                    $totalUnits++;
+                }
+
+                $totalPrice = $bookable->base_cost + ($bookable->unit_cost * $totalUnits * $quantity);
+                break;
+        }
+
+        return [
+            $totalPrice,
+            $bookable->formula,
+            $bookable->currency
+        ];
     }
 
     /**
@@ -193,7 +232,7 @@ abstract class BookableBooking extends Model
      */
     public function bookable(): MorphTo
     {
-        return $this->morphTo('bookable', 'bookable_type', 'bookable_id', 'id');
+        return $this->morphTo('bookable', 'bookable_type', 'bookable_id', 'uuid');
     }
 
     /**
@@ -333,6 +372,24 @@ abstract class BookableBooking extends Model
                        ->whereNotNull('starts_at')
                        ->where('starts_at', '>=', new Carbon($startsAt))
                        ->where('starts_at', '<=', new Carbon($endsAt));
+    }
+
+    public function scopeStartsOrEndsBetween(Builder $builder, string $startsAt, string $endsAt): Builder
+    {
+        return $builder->where(function($query) use ($startsAt, $endsAt) {
+            $query->where(function($query1) use ($startsAt, $endsAt) {
+                $query1->whereNull('canceled_at')
+                    ->whereNotNull('starts_at')
+                    ->where('starts_at', '>=', new Carbon($startsAt))
+                    ->where('starts_at', '<=', new Carbon($endsAt));
+            });
+            $query->orWhere(function($query1) use ($startsAt, $endsAt) {
+                $query1->whereNull('canceled_at')
+                    ->whereNotNull('ends_at')
+                    ->where('ends_at', '>=', new Carbon($startsAt))
+                    ->where('ends_at', '<=', new Carbon($endsAt));
+            });
+        });
     }
 
     /**

@@ -182,6 +182,8 @@ trait Bookable
             'customer_type' => $customer->getMorphClass(),
             'starts_at' => (new Carbon($startsAt))->toDateTimeString(),
             'ends_at' => (new Carbon($endsAt))->toDateTimeString(),
+            'quantity' => 1,
+            'currency' => 'GBP'
         ]);
     }
 }
