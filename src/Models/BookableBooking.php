@@ -381,12 +381,12 @@ abstract class BookableBooking extends Model
                 $query1->whereNull('canceled_at')
                     ->whereNotNull('starts_at')
                     ->where('starts_at', '>=', new Carbon($startsAt))
-                    ->where('starts_at', '<=', new Carbon($endsAt));
+                    ->where('starts_at', '<', new Carbon($endsAt));
             });
             $query->orWhere(function($query1) use ($startsAt, $endsAt) {
                 $query1->whereNull('canceled_at')
                     ->whereNotNull('ends_at')
-                    ->where('ends_at', '>=', new Carbon($startsAt))
+                    ->where('ends_at', '>', new Carbon($startsAt))
                     ->where('ends_at', '<=', new Carbon($endsAt));
             });
         });
